@@ -1,0 +1,103 @@
+---
+- hosts: local
+  gather_facts: no
+  tasks:
+    - name: create dir
+      ansible.builtin.file:
+        path: '/etc/backup/{{ item }}'
+        state: directory
+      register: local_dir
+      delegate_to: localhost
+      loop: '{{ ter_groups }}'
+
+- name: Backup ios config
+  hosts: ios
+  gather_facts: no
+
+  tasks:
+    
+    - name: Show IOS_COMMAND
+      cisco.ios.ios_command:
+        commands: 
+        - show version
+        - show inventory
+        - show run
+      register: output
+    
+    - name: SAVE IOS_INV
+      copy:
+        content: "{{ output.stdout[1] + newline + output.stdout[0] | regex_replace ('.+ uptime is.+', ' ') }}"
+        dest: "/etc/backup/{{ ter }}/{{ inventory_hostname }}.inv"
+    - name: SAVE IOS_CFG
+      copy:
+        content: "{{ output.stdout[2] | regex_replace ('Building .+[\\S\\s]*bytes', '') }}"
+        dest: "/etc/backup/{{ ter }}/{{ inventory_hostname }}.cfg"
+
+        
+
+- name: Backup wlc config
+  hosts: wlc
+  gather_facts: no
+  
+  tasks:
+    - name: Show run WLC_CONFIG
+      aireos_command:
+        commands:
+          - show udi
+          - show boot
+          - show run-config commands
+      register: output
+    - name: SAVE WLC_INV
+      copy:
+        content: "{{ output.stdout[0] + newline + output.stdout[1] }}"
+        dest: "/etc/backup/khor/wlc_{{ inventory_hostname }}.inv"
+
+    - name: SAVE WLC_CONFIG
+      copy:
+        content: "{{ output.stdout[2] }}"
+        dest: "/etc/backup/khor/wlc_{{ inventory_hostname }}.cfg"
+        
+- name: Backup junos config
+  hosts: junos
+  gather_facts: no
+
+  tasks:
+    - name: Show run JUNOS_CONFIG
+      junipernetworks.junos.junos_command:
+        commands: 
+        - show version
+        - show chassis hardware
+        - show conf
+      register: output
+
+    - name: SAVE JUNOS_INV
+      copy:
+        content: "{{ output.stdout[1] + newline + output.stdout[0] }}"
+        dest: "/etc/backup/{{ ter }}/{{ inventory_hostname }}.inv"
+    - name: save JUNOS_CFG
+      copy:
+        content: "{{ output.stdout[2] }}"
+        dest: "/etc/backup/{{ ter }}/{{ inventory_hostname }}.cfg"
+
+- name: Backup asa config
+  hosts: asa
+  gather_facts: no
+
+  tasks:
+      - name: Show run ASA_CONFIG
+        cisco.asa.asa_command:
+          commands:
+          - show inventory
+          - show version
+          - show run
+        register: output
+
+      - name: SAVE ASA_CONFIG_INV
+        copy:
+          content: "{{ output.stdout[0] + newline + output.stdout[1] | regex_replace ('.+ up.+', ' ') }}"
+          dest: "/etc/backup/{{ ter }}/{{ inventory_hostname }}.inv"
+
+      - name: SAVE ASA_CONFIG_CFG
+        copy:
+          content: "{{ output.stdout[2] }}"
+          dest: "/etc/backup/{{ ter }}/{{ inventory_hostname }}.cfg"
